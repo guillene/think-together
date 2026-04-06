@@ -9,6 +9,9 @@
 
 import { joinSession } from "@github/copilot-sdk/extension";
 
+const AUTOPILOT_NUDGE_THRESHOLD = 4;
+let autopilotStreak = 0;
+
 const THINK_TOGETHER_FRAMEWORK = `
 ## Think Together — Active AI Engagement Mode
 
@@ -62,7 +65,7 @@ When detected, proactively suggest automation. Don't repeat the same suggestion 
 
 ---
 
-### Experimental: Hands-On Nudge
+### Hands-On Nudge
 
 If the user has been in autopilot mode for several consecutive coding tasks, gently ask: "You've been delegating a lot lately. Want to take this one more hands-on?"
 `.trim();
@@ -85,12 +88,25 @@ const session = await joinSession({
             }
 
             if (keywordMatch || modeMatch) {
+                autopilotStreak++;
                 await session.log("⚡ Autopilot mode — executing efficiently.", { ephemeral: true });
-                return {
-                    additionalContext:
-                        "The user is in autopilot mode. Skip ALL Think Together thinking pauses for this message. Execute efficiently without asking clarifying questions or quizzing afterward.",
-                };
+
+                let context =
+                    "The user is in autopilot mode. Skip ALL Think Together thinking pauses for this message. Execute efficiently without asking clarifying questions or quizzing afterward.";
+
+                if (autopilotStreak >= AUTOPILOT_NUDGE_THRESHOLD) {
+                    context +=
+                        `\n\nThe user has been in autopilot for ${autopilotStreak} consecutive turns. ` +
+                        'Before executing, gently ask: "You\'ve been delegating for a while now. Want to take this one more hands-on?" ' +
+                        "If they decline, proceed in autopilot. Only nudge once — don't repeat if they dismiss it.";
+                    autopilotStreak = 0;
+                }
+
+                return { additionalContext: context };
             }
+
+            // Non-autopilot turn resets the streak
+            autopilotStreak = 0;
         },
     },
     tools: [],
