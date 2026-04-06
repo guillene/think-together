@@ -13,6 +13,15 @@ const AUTOPILOT_NUDGE_THRESHOLD = 4;
 let autopilotStreak = 0;
 let totalTurns = 0;
 let autopilotTurns = 0;
+let engagedTurns = 0;
+
+// Toil detection: track repeated shell command patterns
+const commandPatterns = new Map();
+const TOIL_THRESHOLD = 3;
+const toilSuggested = new Set();
+
+// Dismissal patterns — short acknowledgments, not deep engagement
+const DISMISSAL_PATTERN = /^(got it|ok|okay|yes|sure|proceed|go ahead|makes sense|yep|yeah|do it|looks good|lgtm|go for it|sounds good|that works|perfect|great|fine|👍|next|continue)\s*[.!]?$/i;
 
 const THINK_TOGETHER_FRAMEWORK = `
 ## Think Together — Active AI Engagement Mode
@@ -103,13 +112,67 @@ const session = await joinSession({
 
             // Non-autopilot turn resets the streak
             autopilotStreak = 0;
-        },
-    },
-        onSessionEnd: async () => {
-            if (totalTurns > 0 && autopilotTurns > 0) {
-                await session.log(
-                    `📊 Session recap: ${autopilotTurns}/${totalTurns} turns in autopilot.`
-                );
+
+            // Positive reinforcement: track engaged vs dismissal turns
+            const trimmed = input.prompt.trim();
+            if (trimmed.length > 0 && !DISMISSAL_PATTERN.test(trimmed)) {
+                engagedTurns++;
             }
         },
+        onPostToolUse: async (input) => {
+            if (input.toolName !== "powershell") return;
+
+            const cmd = String(input.toolArgs?.command || "");
+            const pattern = extractCommandPattern(cmd);
+            if (!pattern) return;
+
+            const count = (commandPatterns.get(pattern) || 0) + 1;
+            commandPatterns.set(pattern, count);
+
+            if (count >= TOIL_THRESHOLD && !toilSuggested.has(pattern)) {
+                toilSuggested.add(pattern);
+                return {
+                    additionalContext:
+                        `Toil detected: the command pattern "${pattern}" has been run ${count} times this session. ` +
+                        "Proactively suggest to the user that this could be automated with a script, alias, or function.",
+                };
+            }
+        },
+        onSessionEnd: async () => {
+            const parts = [];
+            if (engagedTurns > 0) {
+                parts.push(`🧠 You thought deeply on ${engagedTurns} turn${engagedTurns === 1 ? "" : "s"}`);
+            }
+            if (autopilotTurns > 0) {
+                parts.push(`⚡ ${autopilotTurns}/${totalTurns} turns in autopilot`);
+            }
+            if (parts.length > 0) {
+                await session.log(`📊 Session recap: ${parts.join(" · ")}`);
+            }
+        },
+    },
+    tools: [],
 });
+
+/**
+ * Extract a normalized command pattern from a shell command.
+ * Splits on && and pipes, takes the first meaningful command,
+ * and returns the first 2-3 tokens as the pattern key.
+ */
+function extractCommandPattern(cmd) {
+    const trimmed = cmd.trim();
+    if (!trimmed) return null;
+
+    // Take the first sub-command (before && or |)
+    const firstCmd = trimmed.split(/\s*(?:&&|\|\|?)\s*/)[0].trim();
+
+    // Skip leading cd commands to get the actual work command
+    const withoutCd = firstCmd.replace(/^cd\s+[^\s]+\s*(?:&&\s*)?/, "").trim();
+    const target = withoutCd || firstCmd;
+
+    // Extract first 2 tokens as the pattern (e.g., "git add", "npm test")
+    const tokens = target.split(/\s+/).slice(0, 2);
+    if (tokens.length === 0) return null;
+
+    return tokens.join(" ").toLowerCase();
+}
