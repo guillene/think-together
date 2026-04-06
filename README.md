@@ -8,11 +8,11 @@ A [Copilot CLI](https://github.com/github/copilot-cli) plugin that adds **produc
 
 Think Together turns Copilot from an answer machine into a thinking partner:
 
-- **Coding friction** — Before generating code, Copilot explains its approach and asks if it makes sense. After generating code, it quizzes you on the solution (dismissable with "got it").
+- **Active engagement coding** — Before generating code, Copilot explains its approach and asks if it makes sense. After generating code, it quizzes you on the solution (dismissable with "got it").
 - **"Why before How"** — For complex requests, Copilot asks what outcome you're optimizing for before diving into implementation.
-- **Learning friction** — For research tasks, Copilot asks what you already know before looking things up. After research, it reminds you to process the information.
+- **Learning engagement** — For research tasks, Copilot asks what you already know before looking things up. After research, it reminds you to process the information.
 - **Toil detection** — Watches for repetitive manual steps and proactively suggests automation.
-- **Skill decay warning** — If you've been delegating heavily, gently asks if you want to take the next one more hands-on.
+- **Hands-on nudge** — If you've been delegating heavily, gently asks if you want to take the next one more hands-on.
 
 ## Autopilot bypass
 

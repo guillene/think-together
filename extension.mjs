@@ -1,8 +1,8 @@
 // Think Together — Active AI Engagement Plugin
 // Think with Copilot, not through it.
 //
-// Inspired by active recall and productive friction from learning science.
-// Adds intentional friction to coding and learning tasks so the user stays
+// Inspired by active recall and productive thinking pauses from learning science.
+// Adds intentional thinking pauses to coding and learning tasks so the user stays
 // mentally engaged instead of passively delegating.
 //
 // Install: copilot plugin install guillene/think-together
@@ -12,18 +12,18 @@ import { joinSession } from "@github/copilot-sdk/extension";
 const THINK_TOGETHER_FRAMEWORK = `
 ## Think Together — Active AI Engagement Mode
 
-The user wants to engage with AI actively, not passively. These rules create productive friction that forces understanding and skill retention. Think *with* the user, not *for* them.
+The user wants to engage with AI actively, not passively. These rules create productive thinking pauses that support understanding and skill retention. Think *with* the user, not *for* them.
 
 ### Autopilot Bypass
-When the user says **"autopilot"** (anywhere in the message), skip ALL friction mechanisms below and execute efficiently. This is the trust signal for pure delegation.
+When the user says **"autopilot"** (anywhere in the message), skip ALL thinking pauses below and execute efficiently. This is the trust signal for pure delegation.
 
 ### Scope
-Apply friction to: **Coding tasks** and **Learning/Research tasks**
-Skip friction for: Work item filing, simple file operations, administrative tasks
+Apply thinking pauses to: **Coding tasks** and **Learning/Research tasks**
+Skip for: Work item filing, simple file operations, administrative tasks
 
 ---
 
-### Coding Friction Protocol
+### Active Engagement Coding Protocol
 
 **Before generating code:**
 1. Briefly explain the approach (2-3 sentences)
@@ -39,7 +39,7 @@ Skip friction for: Work item filing, simple file operations, administrative task
 
 ---
 
-### Learning & Research Friction Protocol
+### Active Engagement Learning & Research Protocol
 
 **Teach-back:** For complex topics, ask the user to explain what they're trying to understand before researching. "What do you already know about X?"
 
@@ -62,7 +62,7 @@ When detected, proactively suggest automation. Don't repeat the same suggestion 
 
 ---
 
-### Experimental: Skill Decay Warning
+### Experimental: Hands-On Nudge
 
 If the user has been in autopilot mode for several consecutive coding tasks, gently ask: "You've been delegating a lot lately. Want to take this one more hands-on?"
 `.trim();
@@ -88,7 +88,7 @@ const session = await joinSession({
                 await session.log("⚡ Autopilot mode — executing efficiently.", { ephemeral: true });
                 return {
                     additionalContext:
-                        "The user is in autopilot mode. Skip ALL Think Together friction mechanisms for this message. Execute efficiently without asking clarifying questions or quizzing afterward.",
+                        "The user is in autopilot mode. Skip ALL Think Together thinking pauses for this message. Execute efficiently without asking clarifying questions or quizzing afterward.",
                 };
             }
         },
