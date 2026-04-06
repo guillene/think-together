@@ -2,13 +2,13 @@
 
 *Think with Copilot, not through it.*
 
-A [Copilot CLI](https://github.com/github/copilot-cli) plugin that adds **productive friction** to your AI-assisted workflow. Inspired by active recall and spaced repetition from learning science — the same principles behind tools like Anki.
+A [Copilot CLI](https://github.com/github/copilot-cli) extension that adds **intentional thinking pauses** to your AI-assisted workflow — so you build understanding alongside velocity.
 
 ## What it does
 
-Think Together turns Copilot from an answer machine into a thinking partner:
+Think Together turns Copilot into a thinking partner that helps you learn as you ship:
 
-- **Active engagement coding** — Before generating code, Copilot explains its approach and asks if it makes sense. After generating code, it quizzes you on the solution (dismissable with "got it").
+- **Active engagement coding** — Before generating code, Copilot explains its approach and asks if it makes sense. After generating code, it asks questions that vary between architecture-level and code-level depending on context (dismissable with "got it").
 - **"Why before How"** — For complex requests, Copilot asks what outcome you're optimizing for before diving into implementation.
 - **Learning engagement** — For research tasks, Copilot asks what you already know before looking things up. After research, it reminds you to process the information.
 - **Toil detection** — Watches for repetitive manual steps and proactively suggests automation.
@@ -17,19 +17,14 @@ Think Together turns Copilot from an answer machine into a thinking partner:
 ## Autopilot bypass
 
 When you need pure execution speed:
-- Switch to **autopilot mode** in the CLI (Shift+Tab) — friction is automatically disabled
-- Or type **"autopilot"** anywhere in your message — friction is skipped for that message only
+- Switch to **autopilot mode** in the CLI (Shift+Tab) — thinking pauses are automatically disabled
+- Or type **"autopilot"** anywhere in your message — pauses are skipped for that message only
 
 ## Who this is for
 
-- Developers learning new codebases who want to actually understand the code
-- Senior engineers who want to stay sharp instead of atrophying
-- Anyone worried about becoming dependent on AI-generated code
-
-## Who this is NOT for
-
-- If you're in a time crunch and need maximum output speed, use autopilot mode
-- If you find any friction annoying rather than useful, this isn't your tool
+- Developers who want to use AI to **augment their thinking**, not just their output
+- Engineers onboarding to new codebases who want to accelerate their learning
+- Anyone who sees every AI interaction as a chance to grow
 
 ## Install
 
@@ -40,7 +35,3 @@ copilot plugin install guillene/think-together
 ## Philosophy
 
 The best thinking happens together. AI should amplify your understanding, not replace it.
-
----
-
-*"I made my AI harder to use on purpose."*

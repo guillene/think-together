@@ -15,11 +15,6 @@ let totalTurns = 0;
 let autopilotTurns = 0;
 let engagedTurns = 0;
 
-// Toil detection: track repeated shell command patterns
-const commandPatterns = new Map();
-const TOIL_THRESHOLD = 3;
-const toilSuggested = new Set();
-
 // Dismissal patterns — short acknowledgments, not deep engagement
 const DISMISSAL_PATTERN = /^(got it|ok|okay|yes|sure|proceed|go ahead|makes sense|yep|yeah|do it|looks good|lgtm|go for it|sounds good|that works|perfect|great|fine|👍|next|continue)\s*[.!]?$/i;
 
@@ -44,7 +39,9 @@ Skip for: Work item filing, simple file operations, administrative tasks
 2. Ask: "Does this make sense before I implement?"
 
 **After generating code:**
-1. Ask 1-2 questions about the solution (e.g., "What does this line do?", "Why X instead of Y?")
+1. Ask 1-2 questions that vary between systems thinking and code-level understanding depending on context:
+   - Systems-level: "How does this interact with the rest of the system?", "What would break if this requirement changed?"
+   - Code-level: "What does this line do?", "Why this approach over [alternative]?"
 2. The user can dismiss with "got it" — no need to answer if they understood
 
 **Why before How:** For complex requests, ask "What outcome are you optimizing for?" before diving in.
@@ -110,7 +107,8 @@ const session = await joinSession({
                 };
             }
 
-            // Non-autopilot turn resets the streak
+            // Non-autopilot turn: check if returning from a long autopilot streak
+            const streakBeforeReset = autopilotStreak;
             autopilotStreak = 0;
 
             // Positive reinforcement: track engaged vs dismissal turns
@@ -118,61 +116,41 @@ const session = await joinSession({
             if (trimmed.length > 0 && !DISMISSAL_PATTERN.test(trimmed)) {
                 engagedTurns++;
             }
-        },
-        onPostToolUse: async (input) => {
-            if (input.toolName !== "powershell") return;
 
-            const cmd = String(input.toolArgs?.command || "");
-            const pattern = extractCommandPattern(cmd);
-            if (!pattern) return;
-
-            const count = (commandPatterns.get(pattern) || 0) + 1;
-            commandPatterns.set(pattern, count);
-
-            if (count >= TOIL_THRESHOLD && !toilSuggested.has(pattern)) {
-                toilSuggested.add(pattern);
+            if (streakBeforeReset >= AUTOPILOT_NUDGE_THRESHOLD) {
                 return {
                     additionalContext:
-                        `Toil detected: the command pattern "${pattern}" has been run ${count} times this session. ` +
-                        "Proactively suggest to the user that this could be automated with a script, alias, or function.",
+                        `The user just came back from ${streakBeforeReset} consecutive autopilot turns. ` +
+                        "Gently suggest they take this one more hands-on — e.g., \"You've been delegating a lot lately. Want to take this one more hands-on?\" " +
+                        "Keep it light, not preachy. If the task is clearly administrative, skip the nudge.",
                 };
             }
         },
-        onSessionEnd: async () => {
-            const parts = [];
-            if (engagedTurns > 0) {
-                parts.push(`🧠 You thought deeply on ${engagedTurns} turn${engagedTurns === 1 ? "" : "s"}`);
-            }
-            if (autopilotTurns > 0) {
-                parts.push(`⚡ ${autopilotTurns}/${totalTurns} turns in autopilot`);
-            }
-            if (parts.length > 0) {
-                await session.log(`📊 Session recap: ${parts.join(" · ")}`);
-            }
-        },
+
+
     },
-    tools: [],
+    tools: [
+        {
+            name: "session_recap",
+            description:
+                "Shows Think Together session stats: engaged turns, autopilot turns, and toil patterns detected. " +
+                "Call when the user asks for a session recap or engagement summary.",
+            parameters: { type: "object", properties: {} },
+            handler: async () => {
+                const parts = [];
+                parts.push(`Total turns: ${totalTurns}`);
+                if (engagedTurns > 0) {
+                    parts.push(`🧠 Engaged turns: ${engagedTurns}`);
+                }
+                if (autopilotTurns > 0) {
+                    parts.push(`⚡ Autopilot turns: ${autopilotTurns}`);
+                }
+                if (parts.length === 1 && totalTurns === 0) {
+                    return "No activity tracked yet.";
+                }
+                return `📊 Session recap\n${parts.join("\n")}`;
+            },
+        },
+    ],
 });
 
-/**
- * Extract a normalized command pattern from a shell command.
- * Splits on && and pipes, takes the first meaningful command,
- * and returns the first 2-3 tokens as the pattern key.
- */
-function extractCommandPattern(cmd) {
-    const trimmed = cmd.trim();
-    if (!trimmed) return null;
-
-    // Take the first sub-command (before && or |)
-    const firstCmd = trimmed.split(/\s*(?:&&|\|\|?)\s*/)[0].trim();
-
-    // Skip leading cd commands to get the actual work command
-    const withoutCd = firstCmd.replace(/^cd\s+[^\s]+\s*(?:&&\s*)?/, "").trim();
-    const target = withoutCd || firstCmd;
-
-    // Extract first 2 tokens as the pattern (e.g., "git add", "npm test")
-    const tokens = target.split(/\s+/).slice(0, 2);
-    if (tokens.length === 0) return null;
-
-    return tokens.join(" ").toLowerCase();
-}
