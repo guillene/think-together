@@ -11,6 +11,8 @@ import { joinSession } from "@github/copilot-sdk/extension";
 
 const AUTOPILOT_NUDGE_THRESHOLD = 4;
 let autopilotStreak = 0;
+let totalTurns = 0;
+let autopilotTurns = 0;
 
 const THINK_TOGETHER_FRAMEWORK = `
 ## Think Together — Active AI Engagement Mode
@@ -78,6 +80,7 @@ const session = await joinSession({
             };
         },
         onUserPromptSubmitted: async (input) => {
+            totalTurns++;
             const keywordMatch = /\bautopilot\b/i.test(input.prompt);
             let modeMatch = false;
             try {
@@ -88,26 +91,25 @@ const session = await joinSession({
             }
 
             if (keywordMatch || modeMatch) {
+                autopilotTurns++;
                 autopilotStreak++;
                 await session.log("⚡ Autopilot mode — executing efficiently.", { ephemeral: true });
 
-                let context =
-                    "The user is in autopilot mode. Skip ALL Think Together thinking pauses for this message. Execute efficiently without asking clarifying questions or quizzing afterward.";
-
-                if (autopilotStreak >= AUTOPILOT_NUDGE_THRESHOLD) {
-                    context +=
-                        `\n\nThe user has been in autopilot for ${autopilotStreak} consecutive turns. ` +
-                        'Before executing, gently ask: "You\'ve been delegating for a while now. Want to take this one more hands-on?" ' +
-                        "If they decline, proceed in autopilot. Only nudge once — don't repeat if they dismiss it.";
-                    autopilotStreak = 0;
-                }
-
-                return { additionalContext: context };
+                return {
+                    additionalContext:
+                        "The user is in autopilot mode. Skip ALL Think Together thinking pauses for this message. Execute efficiently without asking clarifying questions or quizzing afterward.",
+                };
             }
 
             // Non-autopilot turn resets the streak
             autopilotStreak = 0;
         },
     },
-    tools: [],
+        onSessionEnd: async () => {
+            if (totalTurns > 0 && autopilotTurns > 0) {
+                await session.log(
+                    `📊 Session recap: ${autopilotTurns}/${totalTurns} turns in autopilot.`
+                );
+            }
+        },
 });
