@@ -1,0 +1,10 @@
+{
+  "name": "think-together",
+  "description": "Active AI engagement — intentional thinking pauses for coding, learning, and data analysis",
+  "version": "0.1.1",
+  "author": {
+    "name": "Erick Guillén Torelli"
+  },
+  "license": "MIT",
+  "keywords": ["copilot", "active-learning", "thinking-pauses", "engagement"]
+}
