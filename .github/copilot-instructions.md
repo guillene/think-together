@@ -24,3 +24,11 @@ The extension injects a system-level prompt framework (`THINK_TOGETHER_FRAMEWORK
 - **No tests** — There is no test infrastructure. If adding tests, the extension's pure functions (`saveCounters`, `loadCounters`, dismissal matching) are the natural seams.
 - **Fail silently** — All I/O and RPC calls use bare `catch {}` blocks. The extension must never crash the host session; degraded behavior is always preferred over errors.
 - **Module-level state** — Counters live as module-scoped `let` variables, not inside classes or closures. This is intentional for simplicity given the single-instance lifecycle.
+
+## Versioning & Releases
+
+- **Semantic versioning** — The project uses [SemVer](https://semver.org/). The current version lives in `package.json` under `"version"`.
+- **Git tags** — Each release is tagged as `v<major>.<minor>.<patch>` (e.g., `v0.0.1`). Always create an annotated tag (`git tag -a`).
+- **GitHub Releases** — Every version bump gets a corresponding [GitHub Release](https://github.com/guillene/think-together/releases) with a changelog summarizing what changed.
+- **Release workflow** — When bumping a version: (1) update `version` in `package.json`, (2) commit, (3) create an annotated git tag, (4) push with `--tags`, (5) create a GitHub Release via `gh release create`.
+- **License** — MIT. The `LICENSE` file and `package.json` both reflect this.
