@@ -1,0 +1,20 @@
+{
+  "name": "think-together",
+  "version": "0.0.1",
+  "description": "A Copilot CLI extension that adds intentional thinking pauses to your AI-assisted workflow",
+  "main": "extension.mjs",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/guillene/think-together.git"
+  },
+  "author": "Erick Guillén Torelli",
+  "keywords": [
+    "copilot",
+    "copilot-cli",
+    "extension",
+    "active-learning",
+    "thinking-pauses"
+  ]
+}
