@@ -4,7 +4,7 @@
 
 This is a **Copilot CLI extension** — a single ES module (`extension.mjs`) that hooks into the Copilot CLI session lifecycle via `@github/copilot-sdk/extension`.
 
-The extension injects a system-level prompt framework (`THINK_TOGETHER_FRAMEWORK`) at session start and dynamically adjusts per-turn context based on whether the user is in autopilot mode. It also registers a custom tool (`session_recap`).
+The extension injects a system-level prompt framework (`THINK_TOGETHER_FRAMEWORK`) at session start and dynamically adjusts per-turn context based on whether the user is in autopilot mode. It registers two custom tools: `session_recap` (current session) and `todays_recap` (cross-session daily summary).
 
 ### Core patterns
 
@@ -13,7 +13,10 @@ The extension injects a system-level prompt framework (`THINK_TOGETHER_FRAMEWORK
   - `onUserPromptSubmitted` — classifies each turn (autopilot vs engaged) and injects per-turn context
 - **Counter persistence** — Turn stats (`autopilotStreak`, `totalTurns`, etc.) are saved to a JSON file in the session workspace (`files/think-together-counters.json`) so they survive extension restarts. Persistence failures are silently ignored.
 - **Autopilot detection** — Dual-signal: checks both the `autopilot` keyword in the prompt AND the session mode via `session.rpc.mode.get()`. Either signal triggers bypass.
-- **Dismissal pattern** — A regex (`DISMISSAL_PATTERN`) distinguishes genuine engaged turns from short acknowledgments like "got it" or "ok".
+- **Dismissal pattern** — A regex (`DISMISSAL_PATTERN`) built from a shared `DISMISSAL_WORDS` array distinguishes genuine engaged turns from short acknowledgments like "got it" or "ok". The same word list generates SQL conditions for cross-session heuristic classification.
+- **Today's Recap (AI-driven query pattern)** — The `todays_recap` tool returns SQL queries + a presentation template. The AI executes the queries against `session_store` and formats the results. This decouples the extension from Copilot CLI internals. SQL does the heavy computation (engagement heuristics via keyword matching, context switch detection via `LAG` window functions); the AI just presents and narrates.
+- **Multitasking detection** — Uses a configurable threshold (`MULTITASK_THRESHOLD_MINUTES`, default 15). Context switches are detected by ordering all turns across sessions by timestamp and finding consecutive turns in different sessions within the threshold. Engagement classification across sessions is approximate (keyword heuristic) and explicitly labeled as such.
+- **Local date boundaries** — `buildTodaysRecapQueries()` computes start/end of day in local time (not UTC) to avoid calendar boundary confusion.
 - **Three active engagement protocols** — Coding, Learning/Research, and Data Analysis each have tailored pause points, Think Deeper counter-examples, and inline discovery hints.
 - **Complexity-scaled explanations** — The coding protocol uses 3-10 sentences for approach explanations, scaling with problem complexity.
 - **"Why before How" criteria** — Complex tasks are explicitly defined as: multi-component changes, architectural decisions, trade-offs, ambiguous requirements, or unfamiliar domains.

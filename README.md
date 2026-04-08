@@ -135,4 +135,30 @@ Copilot: 📊 Session recap
          ⚡ Autopilot turns: 4
 ```
 
+### Today's recap
+
+See your whole day across all sessions — engagement per session, multitasking patterns, and a reflection prompt:
+```
+You:    "Show me today's recap"
+Copilot: 📊 Today's Recap — Tuesday, April 8, 2026
+
+         ## Sessions (5 total)
+         | Session                  | Turns | 🧠 | ⚡ | 💬 | Started |
+         |--------------------------|-------|----|----|----|---------|
+         | Ship Think Together      |     5 |  3 |  1 |  1 |   17:28 |
+         | Export Dashboard Data    |    12 |  2 |  8 |  2 |   15:59 |
+         | Voice Dictation Research |     3 |  3 |  0 |  0 |   16:33 |
+
+         Totals: 🧠 8 engaged, ⚡ 9 autopilot, 💬 3 dismissals
+         (approximate — inferred from message keywords)
+
+         ## Multitasking Analysis
+         Window 1 (21:28 – 21:58): "Ship Think Together" ↔ "Export Dashboard"
+         - 4 context switches, ~3 min avg gap
+
+         ### 🪞 Was it worth it?
+         "You switched between 3 sessions. Was this intentional —
+          or did it fragment your attention?"
+```
+
 
