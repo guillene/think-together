@@ -2,9 +2,22 @@
 
 ## Architecture
 
-This is a **Copilot CLI extension** — a single ES module (`extension.mjs`) that hooks into the Copilot CLI session lifecycle via `@github/copilot-sdk/extension`.
+This is a **Copilot CLI extension** — an ES module entry point (`extension.mjs`) backed by a modular `lib/` directory, hooking into the Copilot CLI session lifecycle via `@github/copilot-sdk/extension`.
 
 The extension injects a system-level prompt framework (`THINK_TOGETHER_FRAMEWORK`) at session start and dynamically adjusts per-turn context based on whether the user is in autopilot mode. It registers two custom tools: `session_recap` (current session) and `todays_recap` (cross-session daily summary).
+
+### Module structure
+
+```
+extension.mjs          → Entry point: joinSession, hooks, tool wiring (~100 lines)
+lib/
+├── constants.mjs      → DISMISSAL_WORDS, thresholds, DISMISSAL_PATTERN
+├── counters.mjs       → Shared mutable counter object + save/load persistence
+├── framework.mjs      → THINK_TOGETHER_FRAMEWORK prompt string
+└── todays-recap.mjs   → buildTodaysRecapQueries + todaysRecapTool definition
+plugin.json            → CLI manifest for `copilot extension install`
+test.mjs               → 20 tests (run: `node test.mjs`)
+```
 
 ### Core patterns
 
@@ -24,14 +37,15 @@ The extension injects a system-level prompt framework (`THINK_TOGETHER_FRAMEWORK
 ## Conventions
 
 - **No build step** — The extension is a raw ES module loaded directly by the Copilot CLI runtime. No transpilation, bundling, or compilation.
-- **No tests** — There is no test infrastructure. If adding tests, the extension's pure functions (`saveCounters`, `loadCounters`, dismissal matching) are the natural seams.
+- **Tests** — Run with `node test.mjs`. Tests cover pure functions: dismissal pattern matching (positives, negatives, case, punctuation), counter persistence (round-trip, missing file, corrupt file), and Today's Recap query builder (shape, date boundaries, SQL content). Add tests for new pure functions.
 - **Fail silently** — All I/O and RPC calls use bare `catch {}` blocks. The extension must never crash the host session; degraded behavior is always preferred over errors.
-- **Module-level state** — Counters live as module-scoped `let` variables, not inside classes or closures. This is intentional for simplicity given the single-instance lifecycle.
+- **Shared mutable counter object** — Counters live as an exported mutable object (`export const counters = {...}`) in `lib/counters.mjs`. ES module live bindings keep it synchronized across all importers. This is intentional for simplicity given the single-instance lifecycle.
+- **plugin.json** — Required manifest for `copilot extension install`. Keep `version` in sync with `package.json` when releasing.
 
 ## Versioning & Releases
 
 - **Semantic versioning** — The project uses [SemVer](https://semver.org/). The current version lives in `package.json` under `"version"`.
 - **Git tags** — Each release is tagged as `v<major>.<minor>.<patch>` (e.g., `v0.0.1`). Always create an annotated tag (`git tag -a`).
 - **GitHub Releases** — Every version bump gets a corresponding [GitHub Release](https://github.com/guillene/think-together/releases) with a changelog summarizing what changed.
-- **Release workflow** — When bumping a version: (1) update `version` in `package.json`, (2) commit, (3) create an annotated git tag, (4) push with `--tags`, (5) create a GitHub Release via `gh release create`.
+- **Release workflow** — When bumping a version: (1) update `version` in both `package.json` and `plugin.json`, (2) commit, (3) create an annotated git tag, (4) push with `--tags`, (5) create a GitHub Release via `gh release create`.
 - **License** — MIT. The `LICENSE` file and `package.json` both reflect this.
