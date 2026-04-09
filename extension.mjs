@@ -11,8 +11,9 @@ import { joinSession } from "@github/copilot-sdk/extension";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
-import { AUTOPILOT_NUDGE_THRESHOLD, DISMISSAL_PATTERN } from "./lib/constants.mjs";
+import { AUTOPILOT_NUDGE_THRESHOLD } from "./lib/constants.mjs";
 import { counters, initPersistence, saveCounters, loadCounters } from "./lib/counters.mjs";
+import { classifyTurn } from "./lib/classify.mjs";
 import { THINK_TOGETHER_FRAMEWORK } from "./lib/framework.mjs";
 import { todaysRecapTool } from "./lib/todays-recap.mjs";
 
@@ -31,20 +32,23 @@ const session = await joinSession({
         },
         onUserPromptSubmitted: async (input) => {
             counters.totalTurns++;
-            const keywordMatch = /\bautopilot\b/i.test(input.prompt);
-            let modeMatch = false;
+
+            // Autopilot: mode-only detection via RPC (no keyword matching)
+            let isAutopilot = false;
             try {
                 const { mode } = await session.rpc.mode.get();
-                modeMatch = mode === "autopilot";
+                isAutopilot = mode === "autopilot";
             } catch {
-                // RPC unavailable — fall back to keyword detection only
+                // RPC unavailable — assume not autopilot
             }
 
-            if (keywordMatch || modeMatch) {
+            // Fleet command detection — counts as autopilot delegation
+            const isFleet = /^\/fleet\b/i.test(input.prompt.trim());
+
+            if (isAutopilot || isFleet) {
                 counters.autopilotTurns++;
                 counters.autopilotStreak++;
                 saveCounters();
-                await session.log("⚡ Autopilot mode — executing efficiently.", { ephemeral: true });
 
                 return {
                     additionalContext:
@@ -52,15 +56,13 @@ const session = await joinSession({
                 };
             }
 
-            // Non-autopilot turn: check if returning from a long autopilot streak
+            // Non-autopilot: classify the turn
             const streakBeforeReset = counters.autopilotStreak;
             counters.autopilotStreak = 0;
 
-            // Positive reinforcement: track engaged vs dismissal turns
-            const trimmed = input.prompt.trim();
-            if (trimmed.length > 0 && !DISMISSAL_PATTERN.test(trimmed)) {
-                counters.engagedTurns++;
-            }
+            const category = classifyTurn(input.prompt);
+            if (category === 'engaged') counters.engagedTurns++;
+            if (category === 'delegation') counters.delegationTurns++;
             saveCounters();
 
             if (streakBeforeReset >= AUTOPILOT_NUDGE_THRESHOLD) {
@@ -89,6 +91,13 @@ const session = await joinSession({
                 }
                 if (counters.autopilotTurns > 0) {
                     parts.push(`⚡ Autopilot turns: ${counters.autopilotTurns}`);
+                }
+                if (counters.delegationTurns > 0) {
+                    parts.push(`🔀 Delegation turns: ${counters.delegationTurns}`);
+                }
+                const other = counters.totalTurns - counters.engagedTurns - counters.autopilotTurns - counters.delegationTurns;
+                if (other > 0) {
+                    parts.push(`💬 Other: ${other} (dismissals, short interactions)`);
                 }
                 if (parts.length === 1 && counters.totalTurns === 0) {
                     return "No activity tracked yet.";
