@@ -15,6 +15,7 @@ import { AUTOPILOT_NUDGE_THRESHOLD } from "./lib/constants.mjs";
 import { counters, initPersistence, saveCounters, loadCounters } from "./lib/counters.mjs";
 import { classifyTurn } from "./lib/classify.mjs";
 import { THINK_TOGETHER_FRAMEWORK } from "./lib/framework.mjs";
+import { buildSessionRecapQuery } from "./lib/session-recap.mjs";
 import { todaysRecapTool } from "./lib/todays-recap.mjs";
 
 const session = await joinSession({
@@ -84,25 +85,60 @@ const session = await joinSession({
                 "For cross-session daily stats, use todays_recap instead.",
             parameters: { type: "object", properties: {} },
             handler: async () => {
-                const parts = [];
-                parts.push(`Total turns: ${counters.totalTurns}`);
-                if (counters.engagedTurns > 0) {
-                    parts.push(`🧠 Engaged turns: ${counters.engagedTurns}`);
+                // Extract session ID from workspace path for full-session query
+                let sessionId = null;
+                if (session.workspacePath) {
+                    sessionId = session.workspacePath.replace(/\\/g, '/').split('/').pop();
                 }
-                if (counters.autopilotTurns > 0) {
-                    parts.push(`⚡ Autopilot turns: ${counters.autopilotTurns}`);
+
+                if (!sessionId) {
+                    // No workspace path — fall back to live counters only
+                    const parts = [];
+                    parts.push(`Total turns: ${counters.totalTurns}`);
+                    if (counters.engagedTurns > 0) parts.push(`🧠 Engaged turns: ${counters.engagedTurns}`);
+                    if (counters.autopilotTurns > 0) parts.push(`⚡ Autopilot turns: ${counters.autopilotTurns}`);
+                    if (counters.delegationTurns > 0) parts.push(`🔀 Delegation turns: ${counters.delegationTurns}`);
+                    const other = counters.totalTurns - counters.engagedTurns - counters.autopilotTurns - counters.delegationTurns;
+                    if (other > 0) parts.push(`💬 Other: ${other}`);
+                    if (counters.totalTurns === 0) return "No activity tracked yet.";
+                    return `📊 Session recap (live counters only — no session store available)\n${parts.join("\n")}`;
                 }
-                if (counters.delegationTurns > 0) {
-                    parts.push(`🔀 Delegation turns: ${counters.delegationTurns}`);
-                }
-                const other = counters.totalTurns - counters.engagedTurns - counters.autopilotTurns - counters.delegationTurns;
-                if (other > 0) {
-                    parts.push(`💬 Other: ${other} (dismissals, short interactions)`);
-                }
-                if (parts.length === 1 && counters.totalTurns === 0) {
-                    return "No activity tracked yet.";
-                }
-                return `📊 Session recap\n${parts.join("\n")}`;
+
+                const q = buildSessionRecapQuery(sessionId);
+                return `SESSION RECAP DATA
+Session ID: ${q.sessionId}
+Timezone: ${q.timezone}
+
+== LIVE COUNTERS (extension-tracked subset — may be partial if extension reloaded) ==
+Total turns: ${counters.totalTurns}
+Engaged: ${counters.engagedTurns}
+Autopilot: ${counters.autopilotTurns}
+Delegation: ${counters.delegationTurns}
+
+== RUN THIS QUERY (database: "session_store") ==
+
+--- Per-turn classification ---
+${q.turnDetail}
+
+== FORMAT THE RESULTS AS ==
+
+# 📊 Session Recap
+
+## Turn-by-turn breakdown
+Table with columns: Turn | Your Message | Classification
+- Use the query results. Show message_preview (truncated at 80 chars).
+- Classification emoji: 🧠 engaged, ⚡ autopilot, 🔀 delegation, 💬 dismissal, 💬 interaction
+- **IMPORTANT: All timestamps are UTC. Convert to ${q.timezone} for display.**
+
+## Summary
+Count each category from the query results (NOT from live counters — the query is authoritative).
+Format: "{total} turns — {engaged} engaged, {autopilot} autopilot, {delegation} delegation, {other} other (dismissals + interactions)"
+
+## What we accomplished
+Summarize the key work done based on the message previews. Group related turns into logical work items.
+
+## 🔍 Engagement insight
+One observation about the engagement pattern — were there sustained engaged stretches, or was it mostly delegation? Keep it brief and non-judgmental.`;
             },
         },
         todaysRecapTool,

@@ -13,6 +13,7 @@ import {
 } from "./lib/constants.mjs";
 import { counters, initPersistence, saveCounters, loadCounters } from "./lib/counters.mjs";
 import { classifyTurn } from "./lib/classify.mjs";
+import { buildSessionRecapQuery } from "./lib/session-recap.mjs";
 import { buildTodaysRecapQueries } from "./lib/todays-recap.mjs";
 
 let passed = 0;
@@ -366,6 +367,42 @@ test("/fleet command at start is NOT classified as delegation", () => {
     // /fleet is handled separately as autopilot in extension.mjs, not by classifyTurn
     // classifyTurn sees it as a short interaction
     assert.equal(classifyTurn("/fleet research X and Y"), "interaction");
+});
+
+// --- Session Recap Queries ---
+console.log("\n📋 Session Recap Queries");
+
+test("buildSessionRecapQuery returns expected shape", () => {
+    const q = buildSessionRecapQuery("test-session-123");
+    assert.equal(typeof q.turnDetail, "string");
+    assert.equal(q.sessionId, "test-session-123");
+    assert.equal(typeof q.timezone, "string");
+});
+
+test("turnDetail query filters by session ID", () => {
+    const q = buildSessionRecapQuery("abc-def-456");
+    assert.ok(q.turnDetail.includes("abc-def-456"));
+});
+
+test("turnDetail includes all classification categories", () => {
+    const q = buildSessionRecapQuery("test");
+    assert.ok(q.turnDetail.includes("'autopilot'"));
+    assert.ok(q.turnDetail.includes("'dismissal'"));
+    assert.ok(q.turnDetail.includes("'delegation'"));
+    assert.ok(q.turnDetail.includes("'engaged'"));
+    assert.ok(q.turnDetail.includes("'interaction'"));
+});
+
+test("turnDetail includes dismissal and delegation heuristics", () => {
+    const q = buildSessionRecapQuery("test");
+    assert.ok(q.turnDetail.includes("got it"));
+    assert.ok(q.turnDetail.includes("research"));
+    assert.ok(q.turnDetail.includes("/fleet"));
+});
+
+test("timezone is a valid IANA zone name in session recap", () => {
+    const q = buildSessionRecapQuery("test");
+    assert.ok(q.timezone.includes('/') || q.timezone === 'UTC', `Expected IANA zone, got: ${q.timezone}`);
 });
 
 // --- Summary ---
