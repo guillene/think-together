@@ -109,36 +109,59 @@ const session = await joinSession({
 Session ID: ${q.sessionId}
 Timezone: ${q.timezone}
 
-== LIVE COUNTERS (extension-tracked subset — may be partial if extension reloaded) ==
-Total turns: ${counters.totalTurns}
-Engaged: ${counters.engagedTurns}
-Autopilot: ${counters.autopilotTurns}
-Delegation: ${counters.delegationTurns}
-
 == RUN THIS QUERY (database: "session_store") ==
-
---- Per-turn classification ---
-${q.turnDetail}
+${q.summary}
 
 == FORMAT THE RESULTS AS ==
 
 # 📊 Session Recap
 
-## Turn-by-turn breakdown
-Table with columns: Turn | Your Message | Classification
-- Use the query results. Show message_preview (truncated at 80 chars).
-- Classification emoji: 🧠 engaged, ⚡ autopilot, 🔀 delegation, 💬 dismissal, 💬 interaction
-- **IMPORTANT: All timestamps are UTC. Convert to ${q.timezone} for display.**
+{total_turns} turns total — {engaged} engaged, {autopilot} autopilot, {delegation} delegation, {other} other
 
-## Summary
-Count each category from the query results (NOT from live counters — the query is authoritative).
-Format: "{total} turns — {engaged} engaged, {autopilot} autopilot, {delegation} delegation, {other} other (dismissals + interactions)"
+Table with columns: | Category | Count | — one row per non-zero category with emoji:
+🧠 Engaged | ⚡ Autopilot | 🔀 Delegation | 💬 Other (sum of dismissals + interactions)
+
+Show session duration: first_turn to last_turn. **IMPORTANT: timestamps are UTC — convert to ${q.timezone}.**
 
 ## What we accomplished
-Summarize the key work done based on the message previews. Group related turns into logical work items.
+Summarize the key work done this session. Group into logical work items with numbered list.
 
 ## 🔍 Engagement insight
-One observation about the engagement pattern — were there sustained engaged stretches, or was it mostly delegation? Keep it brief and non-judgmental.`;
+One brief observation about the engagement pattern. Non-judgmental.`;
+            },
+        },
+        {
+            name: "session_recap_debug",
+            description:
+                "Debug version of session_recap — shows per-turn classification for fine-tuning. " +
+                "Call when the user asks for session recap debug or detailed turn breakdown.",
+            parameters: { type: "object", properties: {} },
+            handler: async () => {
+                let sessionId = null;
+                if (session.workspacePath) {
+                    sessionId = session.workspacePath.replace(/\\/g, '/').split('/').pop();
+                }
+                if (!sessionId) return "No session store available — cannot show per-turn debug.";
+
+                const q = buildSessionRecapQuery(sessionId);
+                return `SESSION RECAP DEBUG — Per-turn classification
+Session ID: ${q.sessionId}
+Timezone: ${q.timezone}
+
+== RUN THIS QUERY (database: "session_store") ==
+${q.turnDetail}
+
+== FORMAT THE RESULTS AS ==
+
+# 🔬 Session Recap — Debug
+
+Table with columns: Turn | Message | Classification | Time
+- Show message_preview (truncated at 80 chars).
+- Classification emoji: 🧠 engaged, ⚡ autopilot, 🔀 delegation, 💬 dismissal, 💬 interaction
+- **IMPORTANT: timestamps are UTC — convert to ${q.timezone}.**
+
+Then show the summary counts below the table.
+Useful for fine-tuning classification rules — flag any turns that seem miscategorized.`;
             },
         },
         todaysRecapTool,

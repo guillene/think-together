@@ -374,14 +374,29 @@ console.log("\n📋 Session Recap Queries");
 
 test("buildSessionRecapQuery returns expected shape", () => {
     const q = buildSessionRecapQuery("test-session-123");
+    assert.equal(typeof q.summary, "string");
     assert.equal(typeof q.turnDetail, "string");
     assert.equal(q.sessionId, "test-session-123");
     assert.equal(typeof q.timezone, "string");
 });
 
+test("summary query filters by session ID", () => {
+    const q = buildSessionRecapQuery("abc-def-456");
+    assert.ok(q.summary.includes("abc-def-456"));
+});
+
 test("turnDetail query filters by session ID", () => {
     const q = buildSessionRecapQuery("abc-def-456");
     assert.ok(q.turnDetail.includes("abc-def-456"));
+});
+
+test("summary includes aggregated category counts", () => {
+    const q = buildSessionRecapQuery("test");
+    assert.ok(q.summary.includes("engaged"));
+    assert.ok(q.summary.includes("autopilot"));
+    assert.ok(q.summary.includes("delegation"));
+    assert.ok(q.summary.includes("dismissals"));
+    assert.ok(q.summary.includes("interactions"));
 });
 
 test("turnDetail includes all classification categories", () => {
