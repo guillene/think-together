@@ -1,5 +1,11 @@
 # Think Together
 
+[![GitHub Stars](https://img.shields.io/github/stars/guillene/think-together?style=flat-square)](https://github.com/guillene/think-together/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/guillene/think-together?style=flat-square)](https://github.com/guillene/think-together/forks)
+[![GitHub Issues](https://img.shields.io/github/issues/guillene/think-together?style=flat-square)](https://github.com/guillene/think-together/issues)
+[![License](https://img.shields.io/github/license/guillene/think-together?style=flat-square)](LICENSE)
+[![Version](https://img.shields.io/github/v/tag/guillene/think-together?sort=semver&label=version&style=flat-square)](https://github.com/guillene/think-together/releases)
+
 *Think with Copilot, not through it.*
 
 A [Copilot CLI](https://github.com/github/copilot-cli) extension that adds **intentional thinking pauses** to your AI-assisted workflow — so you build understanding alongside velocity.
