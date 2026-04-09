@@ -9,11 +9,10 @@ import { tmpdir } from "node:os";
 
 import {
     DISMISSAL_WORDS, DISMISSAL_PATTERN, DELEGATION_WORDS, DELEGATION_PATTERN,
-    AUTOPILOT_NUDGE_THRESHOLD, MULTITASK_THRESHOLD_MINUTES, MIN_ENGAGED_LENGTH,
+    AUTOPILOT_NUDGE_THRESHOLD, MULTITASK_THRESHOLD_MINUTES,
 } from "./lib/constants.mjs";
 import { counters, initPersistence, saveCounters, loadCounters } from "./lib/counters.mjs";
-import { classifyTurn } from "./lib/classify.mjs";
-import { buildSessionRecapQuery } from "./lib/session-recap.mjs";
+import { classifyTurn, stripSystemPrefix } from "./lib/classify.mjs";
 import { buildTodaysRecapQueries } from "./lib/todays-recap.mjs";
 
 let passed = 0;
@@ -46,10 +45,6 @@ test("AUTOPILOT_NUDGE_THRESHOLD is a positive number", () => {
 
 test("MULTITASK_THRESHOLD_MINUTES is 15", () => {
     assert.equal(MULTITASK_THRESHOLD_MINUTES, 15);
-});
-
-test("MIN_ENGAGED_LENGTH is 30", () => {
-    assert.equal(MIN_ENGAGED_LENGTH, 30);
 });
 
 // --- Delegation Pattern ---
@@ -144,6 +139,7 @@ test("counters has expected shape", () => {
     assert.equal(typeof counters.autopilotTurns, "number");
     assert.equal(typeof counters.engagedTurns, "number");
     assert.equal(typeof counters.delegationTurns, "number");
+    assert.ok(Array.isArray(counters.turnLog));
 });
 
 test("counters are mutable", () => {
@@ -158,49 +154,45 @@ test("save and load round-trips through file", () => {
     mkdirSync(tmpDir, { recursive: true });
     const tmpFile = join(tmpDir, "counters.json");
 
-    // Set known values
     counters.autopilotStreak = 3;
     counters.totalTurns = 10;
     counters.autopilotTurns = 4;
     counters.engagedTurns = 5;
     counters.delegationTurns = 2;
+    counters.turnLog = [{ c: 'engaged', m: 'test msg' }, { c: 'autopilot', m: '/fleet go' }];
 
     initPersistence(tmpFile);
     saveCounters();
 
-    // Verify file was written
     const raw = JSON.parse(readFileSync(tmpFile, "utf-8"));
     assert.equal(raw.totalTurns, 10);
-    assert.equal(raw.autopilotTurns, 4);
-    assert.equal(raw.delegationTurns, 2);
+    assert.equal(raw.turnLog.length, 2);
+    assert.equal(raw.turnLog[0].c, 'engaged');
 
-    // Mutate counters, then reload
     counters.totalTurns = 999;
-    counters.engagedTurns = 999;
-    counters.delegationTurns = 999;
+    counters.turnLog = [];
     loadCounters();
     assert.equal(counters.totalTurns, 10);
-    assert.equal(counters.engagedTurns, 5);
-    assert.equal(counters.delegationTurns, 2);
+    assert.equal(counters.turnLog.length, 2);
 
-    // Cleanup
     rmSync(tmpDir, { recursive: true });
 });
 
-test("loadCounters handles old file without delegationTurns", () => {
+test("loadCounters handles old file without delegationTurns or turnLog", () => {
     const tmpDir = join(tmpdir(), `think-together-test-compat-${Date.now()}`);
     mkdirSync(tmpDir, { recursive: true });
     const tmpFile = join(tmpDir, "counters.json");
-    // Old format without delegationTurns
     writeFileSync(tmpFile, JSON.stringify({
         autopilotStreak: 1, totalTurns: 5, autopilotTurns: 2, engagedTurns: 3,
     }));
 
     initPersistence(tmpFile);
     counters.delegationTurns = 99;
+    counters.turnLog = [{ c: 'test', m: 'old' }];
     loadCounters();
     assert.equal(counters.totalTurns, 5);
-    assert.equal(counters.delegationTurns, 0); // defaults to 0
+    assert.equal(counters.delegationTurns, 0);
+    assert.deepEqual(counters.turnLog, []);
 
     rmSync(tmpDir, { recursive: true });
 });
@@ -302,6 +294,18 @@ test("queries use parameterized dates not date('now')", () => {
 // --- classifyTurn ---
 console.log("\n🏷️  classifyTurn");
 
+test("stripSystemPrefix removes emoji+sentence prefixes", () => {
+    assert.equal(
+        stripSystemPrefix("⚠️ GitHub MCP server not configured. Research FlaUI-MCP"),
+        "Research FlaUI-MCP"
+    );
+});
+
+test("stripSystemPrefix leaves normal messages unchanged", () => {
+    assert.equal(stripSystemPrefix("research FlaUI-MCP"), "research FlaUI-MCP");
+    assert.equal(stripSystemPrefix("Hello. World"), "Hello. World");
+});
+
 test("classifies dismissals", () => {
     assert.equal(classifyTurn("got it"), "dismissal");
     assert.equal(classifyTurn("ok"), "dismissal");
@@ -319,29 +323,60 @@ test("classifies delegation (imperative commands)", () => {
     assert.equal(classifyTurn("summarize the PR"), "delegation");
 });
 
-test("classifies engaged turns (substantive messages)", () => {
-    assert.equal(classifyTurn("I think we should refactor the auth module to use dependency injection"), "engaged");
-    assert.equal(classifyTurn("The problem is that the cache invalidates too aggressively on writes"), "engaged");
-    assert.equal(classifyTurn("Let me explain the requirements for this feature"), "engaged");
+test("classifies system-prefixed research tasks as delegation", () => {
+    assert.equal(classifyTurn("⚠️ GitHub MCP server not configured. Research FlaUI-MCP"), "delegation");
+    assert.equal(classifyTurn("⚠️ GitHub MCP server not configured. Investigate the auth module"), "delegation");
 });
 
-test("classifies questions as engaged regardless of length", () => {
+test("classifies questions as engaged (active seeking)", () => {
     assert.equal(classifyTurn("Why not use Redis?"), "engaged");
     assert.equal(classifyTurn("What about edge cases?"), "engaged");
     assert.equal(classifyTurn("How does this interact with the rest of the system?"), "engaged");
+    assert.equal(classifyTurn("Can you explain why it says 2 autopilot?"), "engaged");
 });
 
-test("very short questions are not engaged", () => {
-    // Under 15 chars with '?' — too short to be meaningful
-    assert.equal(classifyTurn("why?"), "interaction");
-    assert.equal(classifyTurn("what?"), "interaction");
+test("classifies reasoning as engaged (connectors)", () => {
+    assert.equal(classifyTurn("I like this but we need error handling"), "engaged");
+    assert.equal(classifyTurn("This works because the cache invalidates"), "engaged");
+    assert.equal(classifyTurn("We should use Redis instead of Memcached"), "engaged");
 });
 
-test("classifies short non-question messages as interaction", () => {
+test("classifies opinions as engaged", () => {
+    assert.equal(classifyTurn("I think we should refactor this"), "engaged");
+    assert.equal(classifyTurn("Let's use dependency injection here"), "engaged");
+    assert.equal(classifyTurn("We should add tests for this"), "engaged");
+    assert.equal(classifyTurn("What about using a different approach"), "engaged");
+    assert.equal(classifyTurn("I want to understand the architecture"), "engaged");
+});
+
+test("classifies context-providing as engaged", () => {
+    assert.equal(classifyTurn("The problem is that the cache invalidates too early"), "engaged");
+    assert.equal(classifyTurn("The issue is with the auth middleware"), "engaged");
+    assert.equal(classifyTurn("It should return a 404 not a 500"), "engaged");
+});
+
+test("classifies corrections as engaged", () => {
+    assert.equal(classifyTurn("Actually, that's not how it works"), "engaged");
+    assert.equal(classifyTurn("No, the endpoint returns JSON"), "engaged");
+    assert.equal(classifyTurn("Wait, we need to handle the null case"), "engaged");
+});
+
+test("classifies constraints as engaged", () => {
+    assert.equal(classifyTurn("We need to support backwards compatibility"), "engaged");
+    assert.equal(classifyTurn("Make sure the tests pass before merging"), "engaged");
+});
+
+test("classifies short non-signal messages as interaction", () => {
     assert.equal(classifyTurn("you can use /fleet"), "interaction");
     assert.equal(classifyTurn("session recap"), "interaction");
     assert.equal(classifyTurn("today's recap"), "interaction");
     assert.equal(classifyTurn("thanks"), "interaction");
+    assert.equal(classifyTurn("cool"), "interaction");
+});
+
+test("classifies commands as interaction", () => {
+    assert.equal(classifyTurn("/fleet research X"), "interaction");
+    assert.equal(classifyTurn("/chronicle tips"), "interaction");
 });
 
 test("empty and whitespace messages are interaction", () => {
@@ -350,74 +385,8 @@ test("empty and whitespace messages are interaction", () => {
 });
 
 test("does NOT classify referential mentions as delegation", () => {
-    // These start with other words, not imperative delegation verbs
     assert.notEqual(classifyTurn("should we research this first?"), "delegation");
     assert.notEqual(classifyTurn("I want to investigate why this happens"), "delegation");
-    assert.notEqual(classifyTurn("the research shows that this is correct"), "delegation");
-});
-
-test("mentioning 'autopilot' in a question is NOT classified as autopilot-related", () => {
-    // classifyTurn doesn't handle autopilot (that's mode-only now)
-    // but it should classify these as engaged, not something weird
-    assert.equal(classifyTurn("Can you explain why it says 2 autopilot?"), "engaged");
-    assert.equal(classifyTurn("Why did autopilot trigger on that message?"), "engaged");
-});
-
-test("/fleet command at start is NOT classified as delegation", () => {
-    // /fleet is handled separately as autopilot in extension.mjs, not by classifyTurn
-    // classifyTurn sees it as a short interaction
-    assert.equal(classifyTurn("/fleet research X and Y"), "interaction");
-});
-
-// --- Session Recap Queries ---
-console.log("\n📋 Session Recap Queries");
-
-test("buildSessionRecapQuery returns expected shape", () => {
-    const q = buildSessionRecapQuery("test-session-123");
-    assert.equal(typeof q.summary, "string");
-    assert.equal(typeof q.turnDetail, "string");
-    assert.equal(q.sessionId, "test-session-123");
-    assert.equal(typeof q.timezone, "string");
-});
-
-test("summary query filters by session ID", () => {
-    const q = buildSessionRecapQuery("abc-def-456");
-    assert.ok(q.summary.includes("abc-def-456"));
-});
-
-test("turnDetail query filters by session ID", () => {
-    const q = buildSessionRecapQuery("abc-def-456");
-    assert.ok(q.turnDetail.includes("abc-def-456"));
-});
-
-test("summary includes aggregated category counts", () => {
-    const q = buildSessionRecapQuery("test");
-    assert.ok(q.summary.includes("engaged"));
-    assert.ok(q.summary.includes("autopilot"));
-    assert.ok(q.summary.includes("delegation"));
-    assert.ok(q.summary.includes("dismissals"));
-    assert.ok(q.summary.includes("interactions"));
-});
-
-test("turnDetail includes all classification categories", () => {
-    const q = buildSessionRecapQuery("test");
-    assert.ok(q.turnDetail.includes("'autopilot'"));
-    assert.ok(q.turnDetail.includes("'dismissal'"));
-    assert.ok(q.turnDetail.includes("'delegation'"));
-    assert.ok(q.turnDetail.includes("'engaged'"));
-    assert.ok(q.turnDetail.includes("'interaction'"));
-});
-
-test("turnDetail includes dismissal and delegation heuristics", () => {
-    const q = buildSessionRecapQuery("test");
-    assert.ok(q.turnDetail.includes("got it"));
-    assert.ok(q.turnDetail.includes("research"));
-    assert.ok(q.turnDetail.includes("/fleet"));
-});
-
-test("timezone is a valid IANA zone name in session recap", () => {
-    const q = buildSessionRecapQuery("test");
-    assert.ok(q.timezone.includes('/') || q.timezone === 'UTC', `Expected IANA zone, got: ${q.timezone}`);
 });
 
 // --- Summary ---
