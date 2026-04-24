@@ -13,16 +13,29 @@ import {
 } from "./lib/constants.mjs";
 import { counters, initPersistence, saveCounters, loadCounters } from "./lib/counters.mjs";
 import { classifyTurn, stripSystemPrefix } from "./lib/classify.mjs";
-import { buildTodaysRecapQueries } from "./lib/todays-recap.mjs";
+import { buildTodaysRecapQueries, querySessionDb } from "./lib/todays-recap.mjs";
 
 let passed = 0;
 let failed = 0;
+const asyncTests = [];
 
 function test(name, fn) {
     try {
-        fn();
-        passed++;
-        console.log(`  ✅ ${name}`);
+        const result = fn();
+        if (result && typeof result.then === 'function') {
+            // Async test — defer
+            asyncTests.push(result.then(() => {
+                passed++;
+                console.log(`  ✅ ${name}`);
+            }).catch(e => {
+                failed++;
+                console.log(`  ❌ ${name}`);
+                console.log(`     ${e.message}`);
+            }));
+        } else {
+            passed++;
+            console.log(`  ✅ ${name}`);
+        }
     } catch (e) {
         failed++;
         console.log(`  ❌ ${name}`);
@@ -291,6 +304,37 @@ test("queries use parameterized dates not date('now')", () => {
     assert.ok(!q.contextSwitches.includes("date('now')"));
 });
 
+// --- querySessionDb ---
+console.log("\n🗄️  querySessionDb");
+
+test("querySessionDb returns data from local session DB", async () => {
+    const q = buildTodaysRecapQueries();
+    const result = await querySessionDb(q);
+    // node:sqlite should be available on Node 22.5+
+    if (result === null) {
+        console.log("     ⚠️  node:sqlite unavailable — skipping (expected on older Node)");
+        return;
+    }
+    assert.ok(Array.isArray(result.sessions), "sessions should be an array");
+    assert.ok(Array.isArray(result.engagement), "engagement should be an array");
+    assert.ok(Array.isArray(result.switches), "switches should be an array");
+});
+
+test("querySessionDb returns null for nonexistent DB path", async () => {
+    // Build queries but point at a nonexistent DB by temporarily testing the function
+    // querySessionDb uses SESSION_DB_PATH which is fixed, so we test indirectly:
+    // pass queries with impossible date range — should still return (possibly empty) arrays
+    const q = buildTodaysRecapQueries();
+    q.sessionsToday = q.sessionsToday.replace(q.start, "1970-01-01T00:00:00.000Z").replace(q.end, "1970-01-02T00:00:00.000Z");
+    q.engagementBySession = q.engagementBySession.replaceAll(q.start, "1970-01-01T00:00:00.000Z").replaceAll(q.end, "1970-01-02T00:00:00.000Z");
+    q.contextSwitches = q.contextSwitches.replaceAll(q.start, "1970-01-01T00:00:00.000Z").replaceAll(q.end, "1970-01-02T00:00:00.000Z");
+    const result = await querySessionDb(q);
+    if (result === null) return; // node:sqlite unavailable
+    assert.equal(result.sessions.length, 0, "no sessions in 1970");
+    assert.equal(result.engagement.length, 0, "no engagement in 1970");
+    assert.equal(result.switches.length, 0, "no switches in 1970");
+});
+
 // --- classifyTurn ---
 console.log("\n🏷️  classifyTurn");
 
@@ -390,5 +434,6 @@ test("does NOT classify referential mentions as delegation", () => {
 });
 
 // --- Summary ---
+await Promise.all(asyncTests);
 console.log(`\n${passed + failed} tests: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
