@@ -9,6 +9,11 @@
     "type": "git",
     "url": "https://github.com/guillene/think-together.git"
   },
+  "scripts": {
+    "check": "node --check ./extension.mjs",
+    "test": "node ./test.mjs",
+    "install:local": "powershell.exe -ExecutionPolicy Bypass -File ./scripts/install.ps1"
+  },
   "author": "Erick Guillén Torelli",
   "keywords": [
     "copilot",
