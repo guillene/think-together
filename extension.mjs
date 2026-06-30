@@ -18,65 +18,14 @@ import { THINK_TOGETHER_FRAMEWORK } from "./lib/framework.mjs";
 import { todaysRecapTool } from "./lib/todays-recap.mjs";
 
 const session = await joinSession({
-    hooks: {
-        onSessionStart: async () => {
-            if (session.workspacePath) {
-                const dir = join(session.workspacePath, "files");
-                try { mkdirSync(dir, { recursive: true }); } catch {}
-                initPersistence(join(dir, "think-together-counters.json"));
-                loadCounters();
-            }
-            return {
-                additionalContext: THINK_TOGETHER_FRAMEWORK,
-            };
-        },
-        onUserPromptSubmitted: async (input) => {
-            counters.totalTurns++;
-
-            // Autopilot: mode-only detection via RPC (no keyword matching)
-            let isAutopilot = false;
-            try {
-                const { mode } = await session.rpc.mode.get();
-                isAutopilot = mode === "autopilot";
-            } catch {
-                // RPC unavailable — assume not autopilot
-            }
-
-            // Fleet command detection — counts as autopilot delegation
-            const isFleet = /^\/fleet\b/i.test(input.prompt.trim());
-
-            if (isAutopilot || isFleet) {
-                counters.autopilotTurns++;
-                counters.autopilotStreak++;
-                counters.turnLog.push({ c: 'autopilot', m: input.prompt.trim().slice(0, 80) });
-                saveCounters();
-
-                return {
-                    additionalContext:
-                        "The user is in autopilot mode. Skip ALL Think Together thinking pauses for this message. Execute efficiently without asking clarifying questions or quizzing afterward.",
-                };
-            }
-
-            // Non-autopilot: classify the turn
-            const streakBeforeReset = counters.autopilotStreak;
-            counters.autopilotStreak = 0;
-
-            const category = classifyTurn(input.prompt);
-            if (category === 'engaged') counters.engagedTurns++;
-            if (category === 'delegation') counters.delegationTurns++;
-            counters.turnLog.push({ c: category, m: input.prompt.trim().slice(0, 80) });
-            saveCounters();
-
-            if (streakBeforeReset >= AUTOPILOT_NUDGE_THRESHOLD) {
-                return {
-                    additionalContext:
-                        `The user just came back from ${streakBeforeReset} consecutive autopilot turns. ` +
-                        "Gently suggest they take this one more hands-on — e.g., \"You've been delegating a lot lately. Want to take this one more hands-on?\" " +
-                        "Keep it light, not preachy. If the task is clearly administrative, skip the nudge.",
-                };
-            }
-        },
-    },
+    // CLI v1.0.66+ removed SDK JS callback hooks: the native runtime rejects them
+    // and aborts the whole extension load. Think Together's engagement core lived
+    // in callback hooks — onSessionStart injected the framework and initialized
+    // counters; onUserPromptSubmitted classified each turn, tracked autopilot
+    // streaks, and emitted nudges. Those in-process behaviors can't run anymore,
+    // so per-turn tracking and the auto-injected framework are DISABLED until
+    // ported to declarative command/http hooks. The recap tools still load, but
+    // live counters will not increment without the per-turn hook.
     tools: [
         {
             name: "session_recap",
